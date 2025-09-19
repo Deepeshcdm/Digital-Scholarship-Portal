@@ -1,8 +1,8 @@
 import CryptoJS from 'crypto-js';
 import { auth } from './firebase';
-import { 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
   onAuthStateChanged,
   User
@@ -24,7 +24,7 @@ export const generateToken = (user: any): string => {
     role: user.role,
     exp: Date.now() + (24 * 60 * 60 * 1000) // 24 hours
   };
-  
+
   return CryptoJS.AES.encrypt(JSON.stringify(payload), SECRET_KEY).toString();
 };
 
@@ -32,11 +32,11 @@ export const verifyToken = (token: string): AuthToken | null => {
   try {
     const bytes = CryptoJS.AES.decrypt(token, SECRET_KEY);
     const payload = JSON.parse(bytes.toString(CryptoJS.enc.Utf8));
-    
+
     if (payload.exp < Date.now()) {
       return null;
     }
-    
+
     return payload;
   } catch {
     return null;

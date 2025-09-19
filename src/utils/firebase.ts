@@ -8,12 +8,12 @@ import { getStorage } from "firebase/storage";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyBNOI6vCzNN5JY52eGPvHqsnNvy3JDxKw4",
-  authDomain: "digital-scholarship-port-4e362.firebaseapp.com",
-  projectId: "digital-scholarship-port-4e362",
-  storageBucket: "digital-scholarship-port-4e362.firebasestorage.app",
-  messagingSenderId: "853781759924",
-  appId: "1:853781759924:web:ef62bf0da4770df047d4e1"
+    apiKey: "AIzaSyBNOI6vCzNN5JY52eGPvHqsnNvy3JDxKw4",
+    authDomain: "digital-scholarship-port-4e362.firebaseapp.com",
+    projectId: "digital-scholarship-port-4e362",
+    storageBucket: "digital-scholarship-port-4e362.firebasestorage.app",
+    messagingSenderId: "853781759924",
+    appId: "1:853781759924:web:ef62bf0da4770df047d4e1"
 };
 
 // Initialize Firebase

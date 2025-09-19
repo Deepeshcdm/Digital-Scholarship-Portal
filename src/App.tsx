@@ -8,6 +8,7 @@ import { User } from 'firebase/auth';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showSignUp, setShowSignUp] = useState(false);
@@ -16,13 +17,16 @@ function App() {
     // Listen for Firebase auth state changes
     const unsubscribe = onAuthStateChange((user: User | null) => {
       if (user) {
+        setCurrentUser(user);
         setIsAuthenticated(true);
-        // You can set role based on user data or from Firestore
-        // For now, defaulting to student - you can enhance this
-        setUserRole('student');
+        // Try to get role from localStorage or default to student
+        const savedRole = localStorage.getItem('userRole') || 'student';
+        setUserRole(savedRole);
       } else {
+        setCurrentUser(null);
         setIsAuthenticated(false);
         setUserRole(null);
+        localStorage.removeItem('userRole');
       }
       setIsLoading(false);
     });
@@ -33,13 +37,17 @@ function App() {
 
   const handleLogin = (userData: any) => {
     setIsAuthenticated(true);
-    setUserRole(userData.role || 'student');
+    const role = userData.role || 'student';
+    setUserRole(role);
+    localStorage.setItem('userRole', role);
     setShowSignUp(false);
   };
 
   const handleSignUp = (userData: any) => {
     setIsAuthenticated(true);
-    setUserRole(userData.role || 'student');
+    const role = userData.role || 'student';
+    setUserRole(role);
+    localStorage.setItem('userRole', role);
     setShowSignUp(false);
   };
 
@@ -68,10 +76,10 @@ function App() {
 
   switch (userRole) {
     case 'student':
-      return <StudentDashboard />;
+      return <StudentDashboard currentUser={currentUser} userRole={userRole} />;
     case 'college_officer':
     case 'govt_officer':
-      return <OfficerDashboard />;
+      return <OfficerDashboard currentUser={currentUser} userRole={userRole} />;
     default:
       return <Login onLogin={handleLogin} onSwitchToSignUp={switchToSignUp} />;
   }

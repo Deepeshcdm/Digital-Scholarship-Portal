@@ -32,7 +32,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToSignUp }) => {
     try {
       // Use Firebase authentication
       const user = await firebaseLogin(email, password);
-      
+
       // Create user data object
       const userData = {
         uid: user.uid,
@@ -44,7 +44,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToSignUp }) => {
       onLogin(userData);
     } catch (error: any) {
       console.error('Login error:', error);
-      
+
       // Handle specific Firebase auth errors
       let errorMessage = 'Login failed. Please try again.';
       if (error.code === 'auth/user-not-found') {
@@ -56,7 +56,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToSignUp }) => {
       } else if (error.code === 'auth/too-many-requests') {
         errorMessage = 'Too many failed attempts. Please try again later.';
       }
-      
+
       setError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -65,7 +65,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToSignUp }) => {
 
   const handleAadhaarLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!otpSent) {
       setIsLoading(true);
       // Mock OTP sending delay
@@ -79,7 +79,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToSignUp }) => {
     if (otp === '123456') {
       setIsLoading(true);
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       // Mock user lookup by Aadhaar
       const user = getUserByEmail('student@demo.com'); // Demo user
       if (user) {
@@ -88,7 +88,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToSignUp }) => {
     } else {
       setError('Invalid OTP. Use: 123456');
     }
-    
+
     setIsLoading(false);
   };
 
@@ -110,22 +110,20 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToSignUp }) => {
           <div className="flex mb-6 bg-gray-100 rounded-lg p-1">
             <button
               onClick={() => setIsAadhaarLogin(false)}
-              className={`flex-1 flex items-center justify-center py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                !isAadhaarLogin
+              className={`flex-1 flex items-center justify-center py-2 px-4 rounded-md text-sm font-medium transition-colors ${!isAadhaarLogin
                   ? 'bg-white text-gray-900 shadow-sm'
                   : 'text-gray-600 hover:text-gray-900'
-              }`}
+                }`}
             >
               <Mail className="w-4 h-4 mr-2" />
               Email Login
             </button>
             <button
               onClick={() => setIsAadhaarLogin(true)}
-              className={`flex-1 flex items-center justify-center py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                isAadhaarLogin
+              className={`flex-1 flex items-center justify-center py-2 px-4 rounded-md text-sm font-medium transition-colors ${isAadhaarLogin
                   ? 'bg-white text-gray-900 shadow-sm'
                   : 'text-gray-600 hover:text-gray-900'
-              }`}
+                }`}
             >
               <User className="w-4 h-4 mr-2" />
               Aadhaar + OTP

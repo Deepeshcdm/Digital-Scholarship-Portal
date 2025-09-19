@@ -1,24 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, FileText, Clock, CheckCircle, XCircle, DollarSign, Eye } from 'lucide-react';
 import { Layout } from '../Layout';
-import { getCurrentUser } from '../../utils/auth';
 import { getApplicationsByStudent } from '../../utils/storage';
 import { Application } from '../../types';
 import { ApplicationForm } from './ApplicationForm';
 import { ApplicationDetails } from './ApplicationDetails';
+import { User } from 'firebase/auth';
 
-export const StudentDashboard: React.FC = () => {
+interface StudentDashboardProps {
+  currentUser: User | null;
+  userRole?: string;
+}
+
+export const StudentDashboard: React.FC<StudentDashboardProps> = ({ currentUser, userRole = 'student' }) => {
   const [applications, setApplications] = useState<Application[]>([]);
   const [showApplicationForm, setShowApplicationForm] = useState(false);
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
-  const user = getCurrentUser();
 
   useEffect(() => {
-    if (user) {
-      const userApplications = getApplicationsByStudent(user.userId);
+    if (currentUser) {
+      // For now, using email as userId - you can enhance this with proper user mapping
+      const userApplications = getApplicationsByStudent(currentUser.uid);
       setApplications(userApplications);
     }
-  }, [user]);
+  }, [currentUser]);
 
   const getStatusColor = (status: Application['status']) => {
     switch (status) {
@@ -60,8 +65,8 @@ export const StudentDashboard: React.FC = () => {
   const handleApplicationSubmitted = () => {
     setShowApplicationForm(false);
     // Refresh applications
-    if (user) {
-      const userApplications = getApplicationsByStudent(user.userId);
+    if (currentUser) {
+      const userApplications = getApplicationsByStudent(currentUser.uid);
       setApplications(userApplications);
     }
   };
@@ -85,7 +90,7 @@ export const StudentDashboard: React.FC = () => {
   }
 
   return (
-    <Layout title="Student Dashboard">
+    <Layout title="Student Dashboard" currentUser={currentUser} userRole={userRole}>
       <div className="px-4 py-6 sm:px-0">
         {/* Stats Overview */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">

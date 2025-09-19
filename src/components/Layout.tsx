@@ -1,25 +1,35 @@
 import React, { useState, useEffect } from 'react';
 import { User, LogOut, Bell, MessageCircle } from 'lucide-react';
-import { getCurrentUser, logout } from '../utils/auth';
+import { firebaseLogout } from '../utils/auth';
 import { getNotificationsByUser } from '../utils/storage';
 import { ChatBot } from './ChatBot';
+import { User as FirebaseUser } from 'firebase/auth';
 
 interface LayoutProps {
   children: React.ReactNode;
   title: string;
+  currentUser: FirebaseUser | null;
+  userRole?: string;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
-  const [user, setUser] = useState(getCurrentUser());
+export const Layout: React.FC<LayoutProps> = ({ children, title, currentUser, userRole = 'student' }) => {
   const [showChatBot, setShowChatBot] = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   useEffect(() => {
-    if (user) {
-      const notifications = getNotificationsByUser(user.userId);
+    if (currentUser) {
+      const notifications = getNotificationsByUser(currentUser.uid);
       setUnreadNotifications(notifications.filter(n => !n.read).length);
     }
-  }, [user]);
+  }, [currentUser]);
+
+  const handleLogout = async () => {
+    try {
+      await firebaseLogout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
 
   const getRoleDisplayName = (role: string) => {
     switch (role) {
@@ -76,19 +86,19 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
               </button>
 
               {/* User Info */}
-              {user && (
+              {currentUser && (
                 <div className="flex items-center space-x-3">
                   <div className="text-right">
                     <div className="text-sm font-medium text-gray-900">
-                      {user.email}
+                      {currentUser.email}
                     </div>
-                    <div className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getRoleColor(user.role)}`}>
-                      {getRoleDisplayName(user.role)}
+                    <div className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getRoleColor(userRole)}`}>
+                      {getRoleDisplayName(userRole)}
                     </div>
                   </div>
                   <User className="w-8 h-8 text-gray-600" />
                   <button
-                    onClick={logout}
+                    onClick={handleLogout}
                     className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
                     title="Logout"
                   >

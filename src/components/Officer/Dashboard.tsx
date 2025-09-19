@@ -1,29 +1,34 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, Users, TrendingUp, AlertTriangle, Eye, Check, X } from 'lucide-react';
 import { Layout } from '../Layout';
-import { getCurrentUser } from '../../utils/auth';
-import { getApplications, saveApplication, saveNotification, getApplicationsByStatus } from '../../utils/storage';
+import { getApplications, saveApplication, saveNotification } from '../../utils/storage';
 import { blockchain } from '../../utils/blockchain';
 import { fraudDetection } from '../../utils/ai';
 import { Application } from '../../types';
 import { OfficerApplicationDetails } from './OfficerApplicationDetails';
 import { AnalyticsDashboard } from './AnalyticsDashboard';
+import { User } from 'firebase/auth';
 
-export const OfficerDashboard: React.FC = () => {
+interface OfficerDashboardProps {
+  currentUser: User | null;
+  userRole?: string;
+}
+
+export const OfficerDashboard: React.FC<OfficerDashboardProps> = ({ currentUser, userRole = 'college_officer' }) => {
   const [applications, setApplications] = useState<Application[]>([]);
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
   const [showAnalytics, setShowAnalytics] = useState(false);
-  const [fraudReport, setFraudReport] = useState({ fraudAttempts: 0, suspiciousActivities: [] });
+  const [fraudReport, setFraudReport] = useState<{ fraudAttempts: number; suspiciousActivities: string[] }>({ fraudAttempts: 0, suspiciousActivities: [] });
   const [activeTab, setActiveTab] = useState<'pending' | 'all' | 'fraud'>('pending');
 
-  const user = getCurrentUser();
-  const isGovtOfficer = user?.role === 'govt_officer';
-  const isCollegeOfficer = user?.role === 'college_officer';
+  // Use the passed userRole instead of hardcoded value
+  const isGovtOfficer = userRole === 'govt_officer';
+  const isCollegeOfficer = userRole === 'college_officer';
 
   useEffect(() => {
     loadApplications();
     runFraudDetection();
-  }, [user]);
+  }, [currentUser]);
 
   const loadApplications = () => {
     let allApplications = getApplications();
@@ -50,9 +55,9 @@ export const OfficerDashboard: React.FC = () => {
     setFraudReport(report);
   };
 
-  const handleApplicationAction = async (applicationId: string, action: 'verify' | 'approve' | 'reject', remarks?: string) => {
+    const handleApplicationAction = async (applicationId: string, action: 'approve' | 'reject' | 'verify', remarks?: string) => {
     const application = applications.find(app => app.id === applicationId);
-    if (!application || !user) return;
+    if (!application || !currentUser) return;
 
     let newStatus: Application['status'];
     let notificationTitle: string;
@@ -170,13 +175,13 @@ export const OfficerDashboard: React.FC = () => {
         application={selectedApplication}
         onBack={() => setSelectedApplication(null)}
         onAction={handleApplicationAction}
-        userRole={user?.role || 'college_officer'}
+        userRole={userRole}
       />
     );
   }
 
   return (
-    <Layout title={`${isGovtOfficer ? 'Government' : 'College'} Officer Dashboard`}>
+    <Layout title={`${isGovtOfficer ? 'Government' : 'College'} Officer Dashboard`} currentUser={currentUser} userRole={userRole}>
       <div className="px-4 py-6 sm:px-0">
         {/* Stats Overview */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
