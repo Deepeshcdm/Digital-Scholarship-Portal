@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Shield, User, Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { Shield, User, Mail, Lock, Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react';
 import { firebaseRegister } from '../../utils/auth';
+import { validateEmailDomain, detectRoleFromEmail, getEmailExamples } from '../../utils/emailValidation';
 
 interface SignUpProps {
     onSignUp: (user: any) => void;
@@ -22,6 +23,11 @@ export const SignUp: React.FC<SignUpProps> = ({ onSignUp, onSwitchToLogin }) => 
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
+    const [emailValidation, setEmailValidation] = useState<{
+        isValid: boolean;
+        message: string;
+        suggestedRole?: string;
+    }>({ isValid: true, message: '' });
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -29,11 +35,48 @@ export const SignUp: React.FC<SignUpProps> = ({ onSignUp, onSwitchToLogin }) => 
             ...prev,
             [name]: value
         }));
+        
         // Clear error when user starts typing
         if (error) setError('');
+        
+        // Validate email domain when email or role changes
+        if (name === 'email' || name === 'role') {
+            const emailToValidate = name === 'email' ? value : formData.email;
+            const roleToValidate = name === 'role' ? value : formData.role;
+            
+            if (emailToValidate && roleToValidate) {
+                validateEmailForRole(emailToValidate, roleToValidate);
+            } else if (emailToValidate) {
+                // Auto-detect role if only email is provided
+                const detection = detectRoleFromEmail(emailToValidate);
+                if (detection.isValid && detection.detectedRole) {
+                    setEmailValidation({
+                        isValid: true,
+                        message: `✓ ${detection.message || 'Email validated'}`,
+                        suggestedRole: detection.detectedRole
+                    });
+                }
+            }
+        }
+    };
+
+    const validateEmailForRole = (email: string, role: string) => {
+        const validation = validateEmailDomain(email, role);
+        setEmailValidation({
+            isValid: validation.isValid,
+            message: validation.message || '',
+            suggestedRole: validation.detectedRole
+        });
     };
 
     const validateForm = () => {
+        // Email domain validation
+        const emailDomainValidation = validateEmailDomain(formData.email, formData.role);
+        if (!emailDomainValidation.isValid) {
+            setError(emailDomainValidation.message || 'Invalid email domain for selected role');
+            return false;
+        }
+        
         if (formData.password !== formData.confirmPassword) {
             setError('Passwords do not match');
             return false;
@@ -149,10 +192,40 @@ export const SignUp: React.FC<SignUpProps> = ({ onSignUp, onSwitchToLogin }) => 
                                     name="email"
                                     value={formData.email}
                                     onChange={handleInputChange}
-                                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:border-transparent ${
+                                        emailValidation.isValid 
+                                            ? 'border-gray-300 focus:ring-blue-500' 
+                                            : 'border-red-300 focus:ring-red-500'
+                                    }`}
                                     placeholder="Enter your email"
                                     required
                                 />
+                                {emailValidation.message && (
+                                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                                        {emailValidation.isValid ? (
+                                            <CheckCircle className="w-5 h-5 text-green-500" />
+                                        ) : (
+                                            <AlertCircle className="w-5 h-5 text-red-500" />
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                            {emailValidation.message && (
+                                <div className={`mt-2 text-sm ${
+                                    emailValidation.isValid ? 'text-green-600' : 'text-red-600'
+                                }`}>
+                                    {emailValidation.message}
+                                </div>
+                            )}
+                            {emailValidation.suggestedRole && emailValidation.suggestedRole !== formData.role && (
+                                <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
+                                    <p className="text-sm text-blue-700">
+                                        💡 Based on your email domain, we suggest selecting "{emailValidation.suggestedRole.replace('_', ' ')}" as your role.
+                                    </p>
+                                </div>
+                            )}
+                            <div className="mt-1 text-xs text-gray-500">
+                                Examples: {getEmailExamples(formData.role).join(', ')}
                             </div>
                         </div>
 

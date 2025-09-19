@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Shield, User, Mail, Lock, Smartphone, Eye, EyeOff } from 'lucide-react';
 import { firebaseLogin } from '../../utils/auth';
 import { getUserByEmail, initializeDemoData } from '../../utils/storage';
+import { detectRoleFromEmail } from '../../utils/emailValidation';
 
 interface LoginProps {
   onLogin: (user: any) => void;
@@ -33,11 +34,15 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToSignUp }) => {
       // Use Firebase authentication
       const user = await firebaseLogin(email, password);
 
+      // Auto-detect role based on email domain
+      const roleDetection = detectRoleFromEmail(email);
+      const detectedRole = roleDetection.detectedRole || 'student';
+
       // Create user data object
       const userData = {
         uid: user.uid,
         email: user.email,
-        role: 'student', // You can modify this based on your needs
+        role: detectedRole,
         displayName: user.displayName || 'User'
       };
 
