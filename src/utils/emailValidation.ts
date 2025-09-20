@@ -9,19 +9,13 @@ export interface DomainValidationResult {
 export const EMAIL_DOMAIN_RULES = {
   student: {
     domains: [
-      // Educational institutions
-      '.edu', '.edu.in', '.ac.in', '.university', '.college',
-      // Common student email providers
+      // Only personal email providers for students (NOT institutional domains)
       'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com',
-      // Indian educational domains
-      '.edu.in', '.ac.in', '.university.in', '.institute.in',
-      // Specific university domains (examples)
-      'iitd.ac.in', 'iitb.ac.in', 'iitk.ac.in', 'iitm.ac.in', 'iisc.ac.in',
-      'du.ac.in', 'jnu.ac.in', 'bhu.ac.in', 'amu.ac.in', 'nit.ac.in',
-      'vit.ac.in', 'manipal.edu', 'bits-pilani.ac.in', 'dtu.ac.in',
-      'student.', 'stu.', 'stud.'
+      'yahoo.co.in', 'rediffmail.com', 'protonmail.com', 'zoho.com',
+      // Student-specific subdomains (with student identifier)
+      'student.', 'stu.', 'stud.', 's.'
     ],
-    description: 'Students must use educational email (.edu, .ac.in) or personal email addresses'
+    description: 'Students must use personal email addresses (gmail.com, yahoo.com, etc.) or student-specific domains'
   },
   college_officer: {
     domains: [
@@ -32,7 +26,7 @@ export const EMAIL_DOMAIN_RULES = {
       // Indian educational institution domains
       'iitd.ac.in', 'iitb.ac.in', 'iitk.ac.in', 'iitm.ac.in', 'iisc.ac.in',
       'du.ac.in', 'jnu.ac.in', 'bhu.ac.in', 'amu.ac.in', 'nit.ac.in',
-      'vit.ac.in', 'manipal.edu', 'bits-pilani.ac.in', 'dtu.ac.in'
+      'vit.ac.in', 'manipal.edu', 'bits-pilani.ac.in', 'dtu.ac.in','smvec.ac.in'
     ],
     description: 'College officers must use official educational institution email addresses'
   },
@@ -149,9 +143,9 @@ export const detectRoleFromEmail = (email: string): DomainValidationResult => {
   }
 
   // Check college officer domains (staff/faculty domains)
+  // Must have specific indicators for staff/faculty
   if (domain.includes('faculty.') || domain.includes('staff.') || domain.includes('admin.') || 
-      (domain.includes('.edu') && !emailLower.includes('student')) ||
-      (domain.includes('.ac.in') && !emailLower.includes('student'))) {
+      domain.includes('professor.') || domain.includes('teacher.') || domain.includes('lecturer.')) {
     return {
       isValid: true,
       detectedRole: 'college_officer',
@@ -159,26 +153,41 @@ export const detectRoleFromEmail = (email: string): DomainValidationResult => {
     };
   }
 
-  // Default to student for educational or personal emails
-  if (EMAIL_DOMAIN_RULES.student.domains.some(validDomain => {
-    if (validDomain.startsWith('.')) {
-      return domain.endsWith(validDomain.substring(1));
-    } else if (validDomain.endsWith('.')) {
-      return domain.startsWith(validDomain);
+  // Check for institutional domains WITHOUT staff indicators - these should be students
+  if (domain.endsWith('.edu') || domain.endsWith('.edu.in') || domain.endsWith('.ac.in') ||
+      domain.includes('iit') || domain.includes('nit') || domain.includes('university') ||
+      domain.includes('college')) {
+    
+    // If it has student indicators, classify as student
+    if (emailLower.includes('student') || emailLower.includes('stu.') || emailLower.includes('stud.')) {
+      return {
+        isValid: true,
+        detectedRole: 'student',
+        message: 'Student email detected'
+      };
     } else {
-      return domain === validDomain || domain.includes(validDomain);
+      // Institutional domain without student identifier should be college officer
+      return {
+        isValid: true,
+        detectedRole: 'college_officer',
+        message: 'Educational institution email detected'
+      };
     }
-  })) {
+  }
+
+  // Personal email domains - default to student
+  const personalDomains = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com'];
+  if (personalDomains.some(personalDomain => domain === personalDomain)) {
     return {
       isValid: true,
       detectedRole: 'student',
-      message: 'Student email detected'
+      message: 'Personal email detected - suitable for student registration'
     };
   }
 
   return {
     isValid: false,
-    message: 'Email domain not recognized. Please use an appropriate institutional email address.'
+    message: 'Email domain not recognized. Please use an appropriate email address for your role.'
   };
 };
 
@@ -189,9 +198,9 @@ export const getEmailExamples = (role: string): string[] => {
   switch (role) {
     case 'student':
       return [
-        'john.doe@student.university.edu',
-        'student123@iitd.ac.in',
-        'jane.smith@gmail.com'
+        'john.doe@gmail.com',
+        'student123@yahoo.com',
+        'jane.smith@outlook.com'
       ];
     case 'college_officer':
       return [

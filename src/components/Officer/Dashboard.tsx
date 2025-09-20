@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, Users, TrendingUp, AlertTriangle, Eye, Check, X } from 'lucide-react';
 import { Layout } from '../Layout';
-import { getApplications, saveApplication, saveNotification } from '../../utils/storage';
+import { getApplications, saveApplication } from '../../utils/storage';
+import { NotificationBackend } from '../../utils/notificationBackend';
 import { blockchain } from '../../utils/blockchain';
 import { fraudDetection } from '../../utils/ai';
+import { getUserCollege } from '../../utils/collegeMapping';
 import { Application } from '../../types';
 import { OfficerApplicationDetails } from './OfficerApplicationDetails';
 import { AnalyticsDashboard } from './AnalyticsDashboard';
@@ -33,8 +35,21 @@ export const OfficerDashboard: React.FC<OfficerDashboardProps> = ({ currentUser,
   const loadApplications = () => {
     let allApplications = getApplications();
     
-    if (isCollegeOfficer) {
-      // College officers see submitted applications
+    if (isCollegeOfficer && currentUser?.email) {
+      // Get officer's college from their email domain
+      const officerCollege = getUserCollege(currentUser.email);
+      
+      if (officerCollege) {
+        // Filter applications only for this college
+        allApplications = allApplications.filter(app => {
+          // Check if application's college matches officer's college
+          return app.collegeDomain === officerCollege.emailDomain ||
+                 app.college.toLowerCase().includes(officerCollege.collegeName.toLowerCase()) ||
+                 app.college.toLowerCase().includes(officerCollege.collegeCode.toLowerCase());
+        });
+      }
+      
+      // Also filter by status for college officers
       allApplications = allApplications.filter(app => 
         app.status === 'submitted' || app.status === 'college_verified'
       );
@@ -60,23 +75,15 @@ export const OfficerDashboard: React.FC<OfficerDashboardProps> = ({ currentUser,
     if (!application || !currentUser) return;
 
     let newStatus: Application['status'];
-    let notificationTitle: string;
-    let notificationMessage: string;
 
     if (action === 'verify' && isCollegeOfficer) {
       newStatus = 'college_verified';
-      notificationTitle = 'Application Verified by College';
-      notificationMessage = 'Your application has been verified by the college and forwarded for government approval.';
       application.verifiedAt = new Date();
     } else if (action === 'approve' && isGovtOfficer) {
       newStatus = 'govt_approved';
-      notificationTitle = 'Application Approved';
-      notificationMessage = `Congratulations! Your scholarship application has been approved for ₹${application.amount.toLocaleString()}.`;
       application.approvedAt = new Date();
     } else if (action === 'reject') {
       newStatus = 'rejected';
-      notificationTitle = 'Application Rejected';
-      notificationMessage = remarks || 'Your application has been rejected. Please contact support for more information.';
       application.remarks = remarks;
     } else {
       return;
@@ -95,31 +102,32 @@ export const OfficerDashboard: React.FC<OfficerDashboardProps> = ({ currentUser,
       status: newStatus
     });
 
-    // Create notification
-    saveNotification({
-      id: `notif-${Date.now()}`,
-      userId: application.studentId,
-      title: notificationTitle,
-      message: notificationMessage,
-      type: action === 'reject' ? 'error' : action === 'approve' ? 'success' : 'info',
-      read: false,
-      createdAt: new Date()
-    });
+    // Send notification using the new backend service
+    await NotificationBackend.notifyStudentOfCollegeAction(
+      application.id,
+      application.studentId,
+      action === 'verify' ? 'verified' : action === 'approve' ? 'approved' : 'rejected',
+      currentUser.email || '',
+      remarks
+    );
 
     // Mock UPI transfer for approved applications
     if (action === 'approve') {
-      setTimeout(() => {
+      setTimeout(async () => {
         const finalApplication = { ...updatedApplication, status: 'disbursed' as const, disbursedAt: new Date() };
         saveApplication(finalApplication);
         
-        saveNotification({
-          id: `notif-${Date.now() + 1}`,
+        // Send disbursement notification
+        await NotificationBackend.sendNotification({
+          id: `notif-${Date.now()}`,
           userId: application.studentId,
-          title: 'Scholarship Amount Disbursed',
+          title: '💰 Scholarship Amount Disbursed',
           message: `₹${application.amount.toLocaleString()} has been successfully transferred to your bank account ${application.bankAccount}.`,
           type: 'success',
           read: false,
-          createdAt: new Date()
+          createdAt: new Date(),
+          applicationId: application.id,
+          studentEmail: application.email
         });
 
         blockchain.addBlock({

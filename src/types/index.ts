@@ -32,6 +32,8 @@ export interface Application {
   disbursedAt?: Date;
   remarks?: string;
   blockchainHash: string;
+  targetCollegeEmail?: string;
+  collegeDomain?: string;
 }
 
 export interface Document {
@@ -67,6 +69,8 @@ export interface Notification {
   type: 'success' | 'warning' | 'error' | 'info';
   read: boolean;
   createdAt: Date;
+  applicationId?: string;
+  studentEmail?: string;
 }
 
 export interface ChatMessage {

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Shield, User, Mail, Lock, Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react';
-import { firebaseRegister } from '../../utils/auth';
+import { firebaseRegister, storeUserData } from '../../utils/auth';
 import { validateEmailDomain, detectRoleFromEmail, getEmailExamples } from '../../utils/emailValidation';
 
 interface SignUpProps {
@@ -110,7 +110,7 @@ export const SignUp: React.FC<SignUpProps> = ({ onSignUp, onSwitchToLogin }) => 
             // Create user with Firebase
             const user = await firebaseRegister(formData.email, formData.password);
 
-            // Store additional user data in Firestore (you can expand this)
+            // Store additional user data in Firestore
             const userData = {
                 uid: user.uid,
                 email: user.email,
@@ -121,6 +121,9 @@ export const SignUp: React.FC<SignUpProps> = ({ onSignUp, onSwitchToLogin }) => 
                 aadhaarNumber: formData.aadhaarNumber,
                 createdAt: new Date().toISOString()
             };
+
+            // Save to Firestore
+            await storeUserData(userData);
 
             // Call the onSignUp callback with user data
             onSignUp(userData);

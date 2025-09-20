@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { Upload, X, FileText, Loader, CheckCircle, AlertCircle } from 'lucide-react';
 import { Layout } from '../Layout';
 import { getCurrentUser } from '../../utils/auth';
-import { saveApplication, saveNotification, getUserById } from '../../utils/storage';
+import { saveApplication, saveNotification } from '../../utils/storage';
 import { blockchain } from '../../utils/blockchain';
 import { ocrService } from '../../utils/ai';
+import { findCollegeByName, getCollegeSuggestions, generateCollegeOfficerEmail } from '../../utils/collegeMapping';
 import { Application, Document } from '../../types';
 import CryptoJS from 'crypto-js';
 
@@ -31,6 +32,9 @@ export const ApplicationForm: React.FC<ApplicationFormProps> = ({ onSubmit, onCa
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState<Set<string>>(new Set());
+  const [collegeSuggestions, setCollegeSuggestions] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedCollege, setSelectedCollege] = useState<any>(null);
 
   const user = getCurrentUser();
 
@@ -40,6 +44,26 @@ export const ApplicationForm: React.FC<ApplicationFormProps> = ({ onSubmit, onCa
       ...prev,
       [name]: value
     }));
+
+    // Handle college autocomplete
+    if (name === 'college') {
+      if (value.length > 1) {
+        const suggestions = getCollegeSuggestions(value, 8);
+        setCollegeSuggestions(suggestions);
+        setShowSuggestions(true);
+      } else {
+        setShowSuggestions(false);
+      }
+    }
+  };
+
+  const handleCollegeSelect = (college: any) => {
+    setFormData(prev => ({
+      ...prev,
+      college: college.collegeName
+    }));
+    setSelectedCollege(college);
+    setShowSuggestions(false);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, docType: string) => {
@@ -128,6 +152,10 @@ export const ApplicationForm: React.FC<ApplicationFormProps> = ({ onSubmit, onCa
       const applicationId = `APP-${Date.now()}`;
       const amount = calculateScholarshipAmount(formData.category, formData.familyIncome);
       
+      // Find college details for routing
+      const targetCollege = findCollegeByName(formData.college);
+      const collegeOfficerEmail = targetCollege ? generateCollegeOfficerEmail(targetCollege) : null;
+      
       // Create blockchain hash
       const dataString = JSON.stringify({ ...formData, documents: documents.map(d => d.id) });
       const dataHash = CryptoJS.SHA256(dataString).toString();
@@ -149,21 +177,40 @@ export const ApplicationForm: React.FC<ApplicationFormProps> = ({ onSubmit, onCa
         status: 'submitted',
         amount,
         submittedAt: new Date(),
-        blockchainHash
+        blockchainHash,
+        targetCollegeEmail: collegeOfficerEmail || undefined,
+        collegeDomain: targetCollege?.emailDomain
       };
 
       saveApplication(application);
 
-      // Create notification
+      // Create notification for student
       saveNotification({
         id: `notif-${Date.now()}`,
         userId: user.userId,
         title: 'Application Submitted Successfully',
-        message: `Your scholarship application ${applicationId} has been submitted and is pending verification.`,
+        message: `Your scholarship application ${applicationId} has been submitted to ${formData.college} and is pending verification.`,
         type: 'success',
         read: false,
         createdAt: new Date()
       });
+
+      // Create notification for college officer (if college found)
+      if (targetCollege && collegeOfficerEmail) {
+        // In a real system, this would be sent via email or push notification
+        // For demo, we'll create a system notification
+        saveNotification({
+          id: `notif-college-${Date.now()}`,
+          userId: collegeOfficerEmail, // Using email as userId for college officers
+          title: 'New Scholarship Application Received',
+          message: `Student ${formData.studentName} from ${formData.course} has submitted a scholarship application (${applicationId}) for ₹${amount.toLocaleString()}. Please review and verify the documents.`,
+          type: 'info',
+          read: false,
+          createdAt: new Date(),
+          applicationId: applicationId,
+          studentEmail: formData.email
+        });
+      }
 
       // Mock DigiLocker integration notification
       setTimeout(() => {
@@ -178,7 +225,13 @@ export const ApplicationForm: React.FC<ApplicationFormProps> = ({ onSubmit, onCa
         });
       }, 3000);
 
-      alert('Application submitted successfully! You will receive notifications about the status updates.');
+      alert(`Application submitted successfully! 
+      
+Application ID: ${applicationId}
+College: ${formData.college}
+${targetCollege ? `College Officer: ${collegeOfficerEmail}` : 'College not found in database - manual routing required'}
+
+You will receive notifications about status updates.`);
       onSubmit();
     } catch (error) {
       alert('Error submitting application. Please try again.');
@@ -188,7 +241,7 @@ export const ApplicationForm: React.FC<ApplicationFormProps> = ({ onSubmit, onCa
   };
 
   return (
-    <Layout title="New Scholarship Application">
+    <Layout title="New Scholarship Application" currentUser={null}>
       <div className="px-4 py-6 sm:px-0">
         <div className="max-w-4xl mx-auto">
           <div className="bg-white shadow-sm rounded-lg">
@@ -275,14 +328,41 @@ export const ApplicationForm: React.FC<ApplicationFormProps> = ({ onSubmit, onCa
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         College/University *
                       </label>
-                      <input
-                        type="text"
-                        name="college"
-                        value={formData.college}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        required
-                      />
+                      <div className="relative">
+                        <input
+                          type="text"
+                          name="college"
+                          value={formData.college}
+                          onChange={handleInputChange}
+                          onFocus={() => formData.college.length > 1 && setShowSuggestions(true)}
+                          onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Type your college name..."
+                          required
+                        />
+                        {showSuggestions && collegeSuggestions.length > 0 && (
+                          <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                            {collegeSuggestions.map((college, index) => (
+                              <div
+                                key={index}
+                                onClick={() => handleCollegeSelect(college)}
+                                className="px-4 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                              >
+                                <div className="font-medium text-gray-900">{college.collegeName}</div>
+                                <div className="text-sm text-gray-500">{college.location} • {college.type}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {selectedCollege && (
+                          <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
+                            <div className="flex items-center text-sm text-green-700">
+                              <CheckCircle className="w-4 h-4 mr-2" />
+                              {selectedCollege.collegeName} - {selectedCollege.location}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">

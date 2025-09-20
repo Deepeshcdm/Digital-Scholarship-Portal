@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { User, LogOut, Bell, MessageCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { User, LogOut, MessageCircle } from 'lucide-react';
 import { firebaseLogout } from '../utils/auth';
-import { getNotificationsByUser } from '../utils/storage';
 import { ChatBot } from './ChatBot';
+import { NotificationCenter, NotificationBell } from './NotificationCenter';
 import { User as FirebaseUser } from 'firebase/auth';
 
 interface LayoutProps {
@@ -14,14 +14,7 @@ interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ children, title, currentUser, userRole = 'student' }) => {
   const [showChatBot, setShowChatBot] = useState(false);
-  const [unreadNotifications, setUnreadNotifications] = useState(0);
-
-  useEffect(() => {
-    if (currentUser) {
-      const notifications = getNotificationsByUser(currentUser.uid);
-      setUnreadNotifications(notifications.filter(n => !n.read).length);
-    }
-  }, [currentUser]);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   const handleLogout = async () => {
     try {
@@ -68,14 +61,10 @@ export const Layout: React.FC<LayoutProps> = ({ children, title, currentUser, us
             
             <div className="flex items-center space-x-4">
               {/* Notifications */}
-              <button className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors">
-                <Bell className="w-5 h-5" />
-                {unreadNotifications > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                    {unreadNotifications}
-                  </span>
-                )}
-              </button>
+              <NotificationBell
+                userId={currentUser?.uid || ''}
+                onClick={() => setShowNotifications(!showNotifications)}
+              />
 
               {/* ChatBot Toggle */}
               <button
@@ -119,6 +108,15 @@ export const Layout: React.FC<LayoutProps> = ({ children, title, currentUser, us
       {/* ChatBot Modal */}
       {showChatBot && (
         <ChatBot onClose={() => setShowChatBot(false)} />
+      )}
+
+      {/* Notification Center */}
+      {showNotifications && currentUser && (
+        <NotificationCenter
+          userId={currentUser.uid}
+          isOpen={showNotifications}
+          onClose={() => setShowNotifications(false)}
+        />
       )}
     </div>
   );

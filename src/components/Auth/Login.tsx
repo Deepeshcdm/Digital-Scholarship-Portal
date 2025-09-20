@@ -1,7 +1,15 @@
 import React, { useState } from 'react';
-import { Shield, User, Mail, Lock, Smartphone, Eye, EyeOff } from 'lucide-react';
-import { firebaseLogin } from '../../utils/auth';
-import { getUserByEmail, initializeDemoData } from '../../utils/storage';
+import { Mail, Lock, Eye, EyeOff, Phone, Shield, Smartphone } from 'lucide-react';
+import { 
+  firebaseLogin, 
+  initializeRecaptcha, 
+  sendPhoneOTP, 
+  verifyPhoneOTP, 
+  getUserByPhoneNumber,
+  getUserData,
+  cleanupRecaptcha 
+} from '../../utils/auth';
+import { initializeDemoData } from '../../utils/storage';
 import { detectRoleFromEmail } from '../../utils/emailValidation';
 
 interface LoginProps {
@@ -10,10 +18,10 @@ interface LoginProps {
 }
 
 export const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToSignUp }) => {
-  const [isAadhaarLogin, setIsAadhaarLogin] = useState(false);
+  const [isMobileLogin, setIsMobileLogin] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [aadhaar, setAadhaar] = useState('');
+  const [mobile, setMobile] = useState('');
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -24,6 +32,19 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToSignUp }) => {
   React.useEffect(() => {
     initializeDemoData();
   }, []);
+
+  // Initialize recaptcha when mobile login is selected
+  React.useEffect(() => {
+    if (isMobileLogin) {
+      setTimeout(() => {
+        initializeRecaptcha('recaptcha-container');
+      }, 100);
+    }
+    
+    return () => {
+      cleanupRecaptcha();
+    };
+  }, [isMobileLogin]);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,33 +89,83 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToSignUp }) => {
     }
   };
 
-  const handleAadhaarLogin = async (e: React.FormEvent) => {
+  const handleMobileLogin = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!otpSent) {
+      // Validate mobile number format
+      if (mobile.length !== 10) {
+        setError('Please enter a valid 10-digit mobile number');
+        return;
+      }
+
       setIsLoading(true);
-      // Mock OTP sending delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      setOtpSent(true);
-      setIsLoading(false);
-      alert('OTP sent to your registered mobile number: XXXXXX1234');
+      setError('');
+
+      try {
+        // Check if user exists with this mobile number
+        const existingUser = await getUserByPhoneNumber(mobile);
+        if (!existingUser) {
+          setError('No account found with this mobile number. Please register first.');
+          setIsLoading(false);
+          return;
+        }
+
+        // Send real OTP using Firebase
+        await sendPhoneOTP(mobile);
+        setOtpSent(true);
+        setError('');
+        alert(`OTP sent to +91-${mobile.slice(0, 2)}XXXXXX${mobile.slice(-2)}`);
+      } catch (error: any) {
+        console.error('Error sending OTP:', error);
+        setError('Failed to send OTP. Please try again.');
+      } finally {
+        setIsLoading(false);
+      }
       return;
     }
 
-    if (otp === '123456') {
-      setIsLoading(true);
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Mock user lookup by Aadhaar
-      const user = getUserByEmail('student@demo.com'); // Demo user
-      if (user) {
-        onLogin(user);
-      }
-    } else {
-      setError('Invalid OTP. Use: 123456');
+    // Verify OTP
+    if (otp.length !== 6) {
+      setError('Please enter a 6-digit OTP');
+      return;
     }
 
-    setIsLoading(false);
+    setIsLoading(true);
+    setError('');
+
+    try {
+      // Verify OTP using Firebase
+      const firebaseUser = await verifyPhoneOTP(otp);
+      
+      // Get user data from Firestore
+      const userData = await getUserData(firebaseUser.uid);
+      
+      if (userData) {
+        onLogin({
+          uid: firebaseUser.uid,
+          email: userData.email,
+          role: userData.role,
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+          mobile: userData.phoneNumber
+        });
+      } else {
+        // If no user data in Firestore, create basic user profile
+        const basicUser = {
+          uid: firebaseUser.uid,
+          email: firebaseUser.email || `user_${mobile}@mobile.auth`,
+          mobile: mobile,
+          role: 'student' // Default role
+        };
+        onLogin(basicUser);
+      }
+    } catch (error: any) {
+      console.error('OTP verification error:', error);
+      setError('Invalid OTP. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -114,8 +185,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToSignUp }) => {
           {/* Login Method Toggle */}
           <div className="flex mb-6 bg-gray-100 rounded-lg p-1">
             <button
-              onClick={() => setIsAadhaarLogin(false)}
-              className={`flex-1 flex items-center justify-center py-2 px-4 rounded-md text-sm font-medium transition-colors ${!isAadhaarLogin
+              onClick={() => setIsMobileLogin(false)}
+              className={`flex-1 flex items-center justify-center py-2 px-4 rounded-md text-sm font-medium transition-colors ${!isMobileLogin
                   ? 'bg-white text-gray-900 shadow-sm'
                   : 'text-gray-600 hover:text-gray-900'
                 }`}
@@ -124,18 +195,18 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToSignUp }) => {
               Email Login
             </button>
             <button
-              onClick={() => setIsAadhaarLogin(true)}
-              className={`flex-1 flex items-center justify-center py-2 px-4 rounded-md text-sm font-medium transition-colors ${isAadhaarLogin
+              onClick={() => setIsMobileLogin(true)}
+              className={`flex-1 flex items-center justify-center py-2 px-4 rounded-md text-sm font-medium transition-colors ${isMobileLogin
                   ? 'bg-white text-gray-900 shadow-sm'
                   : 'text-gray-600 hover:text-gray-900'
                 }`}
             >
-              <User className="w-4 h-4 mr-2" />
-              Aadhaar + OTP
+              <Phone className="w-4 h-4 mr-2" />
+              Mobile
             </button>
           </div>
 
-          {!isAadhaarLogin ? (
+          {!isMobileLogin ? (
             /* Email Login Form */
             <form onSubmit={handleEmailLogin} className="space-y-6">
               <div>
@@ -195,20 +266,20 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToSignUp }) => {
               </button>
             </form>
           ) : (
-            /* Aadhaar + OTP Login Form */
-            <form onSubmit={handleAadhaarLogin} className="space-y-6">
+            /* Mobile + OTP Login Form */
+            <form onSubmit={handleMobileLogin} className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Aadhaar Number
+                  Mobile Number
                 </label>
                 <div className="relative">
-                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input
                     type="text"
-                    value={aadhaar}
-                    onChange={(e) => setAadhaar(e.target.value.replace(/\D/g, '').slice(0, 12))}
+                    value={mobile}
+                    onChange={(e) => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
                     className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Enter 12-digit Aadhaar number"
+                    placeholder="Enter 10-digit mobile number"
                     required
                     disabled={otpSent}
                   />
@@ -236,13 +307,16 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToSignUp }) => {
 
               <button
                 type="submit"
-                disabled={isLoading || (!otpSent && aadhaar.length !== 12) || (otpSent && otp.length !== 6)}
+                disabled={isLoading || (!otpSent && mobile.length !== 10) || (otpSent && otp.length !== 6)}
                 className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 focus:ring-4 focus:ring-blue-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
               >
                 {isLoading ? 'Processing...' : otpSent ? 'Verify OTP' : 'Send OTP'}
               </button>
             </form>
           )}
+
+          {/* Recaptcha Container (invisible) */}
+          <div id="recaptcha-container"></div>
 
           {/* Sign Up Link */}
           <div className="mt-6 text-center">
@@ -259,10 +333,12 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToSignUp }) => {
 
           {/* Demo Note */}
           <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-            <p className="text-sm font-medium text-gray-700 mb-2">Demo Info:</p>
+            <p className="text-sm font-medium text-gray-700 mb-2">Authentication Info:</p>
             <div className="text-xs text-gray-600 space-y-1">
-              <div>Create a new account with Firebase or use Aadhaar login</div>
-              <div>Aadhaar OTP: 123456</div>
+              <div>• Email: Use Firebase registered email and password</div>
+              <div>• Mobile: Real-time OTP via Firebase (register first)</div>
+              <div>• Students: Use personal emails (gmail.com, yahoo.com, etc.)</div>
+              <div>• Officers: Use institutional/government emails</div>
             </div>
           </div>
         </div>
